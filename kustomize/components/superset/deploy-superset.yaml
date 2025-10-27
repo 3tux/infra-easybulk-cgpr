@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+  namespace: esb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: superset
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-secret
+
+      # Init container for DB setup
+#      initContainers:
+#        - name: superset-init
+#          image: registry.tritux.com/easybulk3/superset:latest
+#          imagePullPolicy: Always
+#          command: ["/bin/bash", "-c", "/app/docker/init.sh"]
+#          envFrom:
+#            - configMapRef:
+#                name: superset-config
+#            - secretRef:
+#                name: superset-secrets
+
+      containers:
+        - name: superset
+          image: registry.tritux.com/easybulk3/superset:latest
+          imagePullPolicy: Always
+          command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
+          ports:
+            - containerPort: 8088
+          envFrom:
+            - configMapRef:
+                name: superset-config
+            - secretRef:
+                name: superset-secrets
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: superset-init-volume
+              mountPath: /app/superset_home/init
+          # --- Resource Requests and Limits (To be adjusted)  ---
+          #resources:
+          #  requests:
+          #    cpu: "500m"
+          #    memory: "1Gi"
+          #  limits:
+          #    cpu: "1"
+          #    memory: "2Gi"
+
+      volumes:
+        - name: superset-init-volume
+          hostPath:
+            path: /mnt/nfs-share/superset/init/
+            type: Directory  

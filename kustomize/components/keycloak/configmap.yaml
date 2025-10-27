@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-auth
+  namespace: esb
+data:
+  KC_PROXY_ADDRESS_FORWARDING: "true"
+  KC_HTTP_ENABLED: "true"
+  KC_LOG_LEVEL: "INFO"
+  TZ: "Africa/Tunis"
+  #JAVA_OPTS_APPEND: "-Dkeycloak.profile.feature.token_exchange=enabled -Dkeycloak.profile=preview -Djboss.node.name=ebs-auth-node-1"
+  JAVA_OPTS_APPEND: "-Xms512m -Xmx1024m"
+  KEYCLOAK_PROFILE: "preview"
+  KEYCLOAK_FEATURES: "token-exchange,persistent-user-sessions"
+  KEYCLOAK_EXTRA_ARGS_PREPENDED: "--spi-login-protocol-openid-connect-legacy-logout-redirect-uri=true"
+  KC_SPI_CONNECTIONS_HTTP_CLIENT_DEFAULT_DISABLE_TRUST_MANAGER: "true"
+  KC_DB_URL: "jdbc:postgresql://postgres-ha.esb.svc.cluster.local:5432/easybulk_auth"
+  KC_DB: "postgres"
+  SERVER_URI: "http://esb-back.esb.svc.cluster.local:9000/v1"
+  GET_ORGANISATION_URI: "/user/find-organizations"
+  ACTIVATION_ENDPOINT: "/user/inviter-user"
+  KC_HOSTNAME: "app.easybulk.intra"
+  KC_HOSTNAME_ADMIN_URL: "https://app.easybulk.intra/auth"
+  KC_PROXY: "edge"
+  KC_HOSTNAME_STRICT: "true"
+
+  KC_FRONTEND_URL: "https://app.easybulk.intra/auth"
+  KC_PROXY_HEADERS: "xforwarded"
+  KC_HTTPS_ENABLED: "false"
+  # KC_SPI_CACHE_EMBEDDED_DEFAULT_NODE_NAME: "ebs-auth-node-1"
+  # KC_BOOTSTRAP_ADMIN_USERNAME: "ebs-superadmin"
+  # KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+
+
+  QUARKUS_HTTP_ACCESS_LOG_ENABLED: "true"
+  QUARKUS_HTTP_ACCESS_LOG_PATTERN: "%h %l %u %r %s %b %t \"%{i,Referer}\" \"%{i,User-Agent}\""
+

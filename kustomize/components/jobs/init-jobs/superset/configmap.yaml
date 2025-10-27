@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+  namespace: esb
+data:
+  DATABASE_DB: "superset"
+  DATABASE_HOST: "postgres-ha.esb.svc.cluster.local"
+  DATABASE_USER: "postgres"
+  DATABASE_PASSWORD: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_DIALECT: "postgresql"
+  SUPERSET_ENV: "production"
+  SUPERSET_LOAD_EXAMPLES: "No"
+  CYPRESS_CONFIG: "false"
+  SUPERSET_PORT: "8088"
+  MAPBOX_API_KEY: ""
+  SUPERSET_AUTH_USER_REGISTRATION: "True"
+  SUPERSET_AUTH_ROLES_SYNC_AT_LOGIN: "True"
+  KEYCLOAK_CLIENT_ID: "ebs-analytics"
+  KEYCLOAK_API_BASE_URL: "http://keycloak-auth.esb.svc.cluster.local/auth/realms/ebs-realm/"
+  KEYCLOAK_SCOPE: "openid profile email"
+    #KEYCLOAK_SERVER_METADATA_URL: "https://app.easybulk.intra/auth/realms/ebs-realm/.well-known/openid-configuration"
+  KEYCLOAK_SERVER_METADATA_URL: "http://keycloak-auth.esb.svc.cluster.local/auth/realms/ebs-realm/.well-known/openid-configuration"
+  KEYCLOAK_PROTOCOL_BASE_URL: "http://app.easybulk.intra/auth/realms/ebs-realm/protocol/"
+  #KEYCLOAK_PROTOCOL_BASE_URL: "http://keycloak-auth.esb.svc.cluster.local/auth/realms/ebs-realm/protocol/"
+  DEFAULT_REDIRECT_URL: "/superset/welcome/"
+  # For new superset version 
+  SUPERSET_HOME_URL: "http://analytics.easybulk.intra"
+  #KEYCLOAK_CUSTOM_REDIRECT_URI: "http://analytics.easybulk.intra/superset/welcome/"
+  KEYCLOAK_CUSTOM_REDIRECT_URI: "https://analytics.easybulk.intra/oauth-authorized/keycloak"
+  #KEYCLOAK_CUSTOM_REDIRECT_URI: "https://analytics.easybulk.intra/superset/dashboard/2/"
+  KEYCLOAK_POST_LOGOUT_URI:  "http://app.easybulk.intra/auth/realms/ebs-realm/protocol/openid-connect/logout"
+
+  ENABLE_PROXY_FIX: "True"
+
+  KEYCLOAK_SERVER_TOKEN_URL: "http://keycloak-auth.esb.svc.cluster.local/auth/realms/ebs-realm/protocol/openid-connect/token"
+  #KEYCLOAK_SERVER_AUTHORIZE_URL: "https://keycloak-auth.esb.svc.cluster.local/auth/realms/ebs-realm/protocol/openid-connect/auth"
+  KEYCLOAK_SERVER_AUTHORIZE_URL: "http://app.easybulk.intra/auth/realms/ebs-realm/protocol/openid-connect/auth"
+  QUARKUS_HTTP_ACCESS_LOG_ENABLED: "true"
+  QUARKUS_HTTP_ACCESS_LOG_PATTERN: "%h %l %u %r %s %b %t \"%{i,Referer}\" \"%{i,User-Agent}\""

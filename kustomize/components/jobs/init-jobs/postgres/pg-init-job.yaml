@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-crunchy-databases
+  namespace: esb
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: init-dbs
+        image: postgres:17
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -euo pipefail
+
+            echo "=== 1️⃣ Creating databases if they do not exist ==="
+
+            # ------------------------
+            # Superset database
+            # ------------------------
+            if ! PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='superset'" | grep -q 1; then
+              echo "Creating database superset"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "CREATE DATABASE superset;"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE superset TO postgres;"
+            else
+              echo "Database superset already exists"
+            fi
+
+            # ------------------------
+            # Airflow database
+            # ------------------------
+            if ! PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1; then
+              echo "Creating database airflow"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "CREATE DATABASE airflow;"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE airflow TO airflowuser;"
+            else
+              echo "Database airflow already exists"
+            fi
+
+            echo "=== 2️⃣ Set database owners and schema privileges ==="
+
+            # ------------------------
+            # easybulk_auth database
+            # ------------------------
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk_auth -v ON_ERROR_STOP=1 -c "ALTER DATABASE easybulk_auth OWNER TO \"ebs-auth\";"
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk_auth -v ON_ERROR_STOP=1 -c "GRANT USAGE, CREATE ON SCHEMA public TO \"ebs-auth\";"
+
+            # ------------------------
+            # easybulk database
+            # ------------------------
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "ALTER DATABASE easybulk OWNER TO \"ebs-app\";"
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "GRANT USAGE, CREATE ON SCHEMA public TO \"ebs-app\";"
+
+
+            echo "=== 4️⃣ Ensure ProxySQL monitor user exists ==="
+            if ! PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='monitor'" | grep -q 1; then
+              echo "Creating monitor user for ProxySQL"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "CREATE USER monitor WITH PASSWORD 'monitor' LOGIN;"
+            else
+              echo "Monitor user already exists, resetting password"
+              PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -c "ALTER USER monitor WITH PASSWORD 'monitor';"
+            fi
+
+
+
+        env:
+        - name: PG_HOST
+          value: "postgres-primary.esb.svc"
+        - name: PG_SUPER_PASS
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pguser-postgres
+              key: password
+

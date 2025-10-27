@@ -1,0 +1,158 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-triggers-easybulk
+  namespace: esb
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: create-triggers
+        image: postgres:17
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -euo pipefail
+
+            echo "=== Creating or replacing trigger functions in easybulk ==="
+
+            # Function: groupe_budget_history_fn
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "
+            CREATE OR REPLACE FUNCTION groupe_budget_history_fn()
+            RETURNS TRIGGER AS \$\$
+            DECLARE
+                target_status_id INT;
+                diff_amount BIGINT;
+            BEGIN
+                -- Check quota change with status ADDED
+                IF NEW.quota > OLD.quota THEN
+                    diff_amount := NEW.quota - OLD.quota;
+                    SELECT id INTO target_status_id FROM prm_status
+                    WHERE code = 'ADDED' AND type = 'BUDGET_STATUS'
+                    LIMIT 1;
+
+                    IF EXISTS (
+                        SELECT 1 FROM budget_history
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id
+                    ) THEN
+                        UPDATE budget_history
+                        SET amount = amount + diff_amount
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id;
+                    ELSE
+                        INSERT INTO budget_history (groupe_id, modification_date, amount, status_id)
+                        VALUES (NEW.id, CURRENT_DATE, diff_amount, target_status_id);
+                    END IF;
+                END IF;
+
+                -- Check quota change with status USED
+                IF NEW.quota < OLD.quota THEN
+                    diff_amount := OLD.quota - NEW.quota;
+                    SELECT id INTO target_status_id FROM prm_status
+                    WHERE code = 'USED' AND type = 'BUDGET_STATUS'
+                    LIMIT 1;
+
+                    IF EXISTS (
+                        SELECT 1 FROM budget_history
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id
+                    ) THEN
+                        UPDATE budget_history
+                        SET amount = amount + diff_amount
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id;
+                    ELSE
+                        INSERT INTO budget_history (groupe_id, modification_date, amount, status_id)
+                        VALUES (NEW.id, CURRENT_DATE, diff_amount, target_status_id);
+                    END IF;
+                END IF;
+
+                -- Check quota_locked change with status LOCKED
+                IF NEW.quota_loked > OLD.quota_loked THEN
+                    diff_amount := NEW.quota_loked - OLD.quota_loked;
+                    SELECT id INTO target_status_id FROM prm_status
+                    WHERE code = 'LOCKED' AND type = 'BUDGET_STATUS'
+                    LIMIT 1;
+
+                    IF EXISTS (
+                        SELECT 1 FROM budget_history
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id
+                    ) THEN
+                        UPDATE budget_history
+                        SET amount = amount + diff_amount
+                        WHERE groupe_id = NEW.id
+                          AND modification_date = CURRENT_DATE
+                          AND status_id = target_status_id;
+                    ELSE
+                        INSERT INTO budget_history (groupe_id, modification_date, amount, status_id)
+                        VALUES (NEW.id, CURRENT_DATE, diff_amount, target_status_id);
+                    END IF;
+                END IF;
+
+                RETURN NEW;
+            END;
+            \$\$ LANGUAGE plpgsql;
+            "
+
+            # Trigger for groupe_budget_history
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "
+            CREATE OR REPLACE TRIGGER groupe_budget_history_trigger
+            BEFORE UPDATE ON groupe
+            FOR EACH ROW
+            EXECUTE FUNCTION groupe_budget_history_fn();
+            "
+
+            # Function: trg_disable_campaign_permissions_fn
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "
+            CREATE OR REPLACE FUNCTION trg_disable_campaign_permissions_fn()
+            RETURNS TRIGGER AS \$\$
+            DECLARE
+                target_campaign_type VARCHAR(50);
+            BEGIN
+                IF (NEW.code IN ('CAMPAIGN_TYPE_TRANSACTIONAL', 'CAMPAIGN_TYPE_CLASSIC') AND NEW.value = '0') THEN
+                    target_campaign_type :=
+                        CASE 
+                            WHEN NEW.code = 'CAMPAIGN_TYPE_TRANSACTIONAL' THEN 'TRANSACTIONAL'
+                            WHEN NEW.code = 'CAMPAIGN_TYPE_CLASSIC' THEN 'CLASSIC'
+                        END;
+
+                    UPDATE campaign_type_permission ctp
+                    SET enabled = FALSE
+                    FROM groupe g, prm_campaign_type pct
+                    WHERE ctp.groupe_id = g.id
+                      AND ctp.campaign_type = pct.code
+                      AND g.organization_id = NEW.organization_id
+                      AND pct.code = target_campaign_type;
+                END IF;
+
+                RETURN NEW;
+            END;
+            \$\$ LANGUAGE plpgsql;
+            "
+
+            # Trigger for prm_organization
+            PGPASSWORD=$PG_SUPER_PASS psql -h $PG_HOST -U postgres -d easybulk -v ON_ERROR_STOP=1 -c "
+            CREATE OR REPLACE TRIGGER trg_disable_campaign_permissions
+            AFTER UPDATE ON prm_organization
+            FOR EACH ROW
+            EXECUTE FUNCTION trg_disable_campaign_permissions_fn();
+            "
+
+        env:
+        - name: PG_HOST
+          value: "postgres-primary.esb.svc"
+        - name: PG_SUPER_PASS
+          valueFrom:
+            secretKeyRef:
+              name: postgres-pguser-postgres
+              key: password
+

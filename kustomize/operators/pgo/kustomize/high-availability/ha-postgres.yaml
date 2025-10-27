@@ -1,0 +1,84 @@
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: postgres
+spec:
+  patroni:
+    dynamicConfiguration:
+      postgresql:
+        pg_hba:
+          - "hostnossl all all all md5"
+  users:
+    - name: airflowuser
+      databases:
+        - airflow
+    - name: ebs-app
+      databases:
+        - easybulk
+    - name: ebs-auth
+      databases:
+        - easybulk_auth
+      options: 'SUPERUSER'
+    - name: postgres
+      databases:
+        - superset
+        - airflow
+        - easybulk
+        - easybulk_auth
+      options: 'SUPERUSER'
+
+  postgresVersion: 17
+  instances:
+    - name: cluster
+      replicas: 2
+      dataVolumeClaimSpec:
+        storageClassName: "nfs-client"
+        accessModes:
+        - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: 5Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  postgres-operator.crunchydata.com/cluster: postgres
+                  postgres-operator.crunchydata.com/instance-set: cluster
+  backups:
+    pgbackrest:
+      restore:
+        enabled: true
+        repoName: repo1
+        options:
+        - --type=time
+        - --target="2025-10-09 14:49:28" # point-in-time just after the backup started (To adjust)
+      repos:
+      - name: repo1
+        #schedules:
+        #  full: "0 1 1 * *"            # Full backup: first day of each month at 01:00 (To adjust)
+        #  differential: "0 1 */14 * *"   # Differential backup: every 14 days at 01:00 (To adjust)
+        volume:
+          volumeClaimSpec:
+            storageClassName: "nfs-client"
+            accessModes:
+            - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: 5Gi
+  proxy:
+    pgBouncer:
+      replicas: 1
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  postgres-operator.crunchydata.com/cluster: postgres
+                  postgres-operator.crunchydata.com/role: pgbouncer

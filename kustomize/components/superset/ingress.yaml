@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: superset-ingress
+  namespace: esb
+  annotations:
+    caddy.ingress.kubernetes.io/rewrite-target: /
+    caddy.ingress.kubernetes.io/proxy-headers: "true"
+spec:
+  ingressClassName: caddy
+  tls:
+    - hosts:
+        - analytics.easybulk.intra
+      secretName: mycerts-caddy
+  rules:
+    - host: analytics.easybulk.intra
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: superset
+                port:
+                  number: 80
+

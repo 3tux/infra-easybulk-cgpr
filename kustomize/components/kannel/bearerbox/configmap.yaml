@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bearerbox-config
+  namespace: esb
+data:
+  kannel.conf: |
+    group = core
+    admin-port = 13000
+    admin-password = b4r
+    log-file = "/var/log/kannel/main.log"
+    log-level = 1
+    access-log = "/var/log/kannel/access.log"
+    smsbox-port = 13001
+    dlr-storage = spool
+    dlr-spool = "/var/spool/kannel-dlr"
+    store-type = spool
+    store-location = "/var/spool/kannel-store"
+    sms-outgoing-queue-limit = 10000000
+    smsbox-max-pending = 2000
+
+    # SMSC SMPP
+    group = smsc
+    smsc = smpp
+    smsc-id = smstt-gateway
+    host = 172.31.16.42
+    port = 50652
+    transceiver-mode = true
+    smsc-username = cgrp
+    smsc-password = cgrp
+    system-type = VMA
+    log-file = /var/log/kannel/smsc-smstt.log
+    log-level = 1
+    allowed-smsc-id = smstt-gateway
+    dest-addr-ton = 1
+    dest-addr-npi = 1
+    source-addr-autodetect = no
+    source-addr-npi = 1
+    source-addr-ton = 1
+    esm-class = 0
+
+
+    group = smsbox
+    bearerbox-host = bearerbox.esb.svc.cluster.local
+    sendsms-port = 13013
+    log-file = "/var/log/kannel/smsbox.log"
+    log-level = 1
+
+
+    # SEND-SMS USERS
+    group = sendsms-user
+    username = foo
+    password = bar
+    concatenation = true
+    max-messages = 5
+

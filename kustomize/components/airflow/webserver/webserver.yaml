@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  namespace: esb
+  labels:
+    app: webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webserver
+  template:
+    metadata:
+      labels:
+        app: webserver
+    spec:
+      serviceAccountName: airflow-sa
+      securityContext:
+        runAsUser: 1000      
+        fsGroup: 1000
+      containers:
+        - name: webserver-pod
+          image: registry.tritux.com/easybulk3/airflow-k8s:v3.0.14-k8s.5
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              airflow db upgrade &&
+              airflow users create --username admin --password admin
+              --firstname Admin --lastname admin --role Admin
+              --email admin@example.com &&
+              airflow webserver
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          envFrom:
+            - configMapRef:
+                name: airflow-variables
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pguser-airflowuser
+                  key: dbname
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pguser-airflowuser
+                  key: user
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pguser-airflowuser
+                  key: host
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pguser-airflowuser
+                  key: password
+          volumeMounts:
+            - name: shared-data
+              mountPath: /data
+            - name: airflow-logs
+              mountPath: /opt/airflow/logs
+          # --- Resource Requests and Limits (To be adjusted)  ---
+          resources:
+            requests:
+              cpu: "100m"        
+              memory: "1600Mi"    
+            limits:
+              cpu: "500m"           
+              memory: "2Gi"   
+      volumes:
+        - name: shared-data
+          hostPath:
+            path: /mnt/nfs-share/back/files
+            type: Directory
+        - name: airflow-logs
+          hostPath:
+            path: /mnt/nfs-share/airflow/logs
+            type: Directory
+      imagePullSecrets:
+        - name: docker-registry-secret
+
