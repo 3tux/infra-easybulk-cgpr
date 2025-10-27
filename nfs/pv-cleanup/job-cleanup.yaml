@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pv-cleanup-job
+  namespace: esb
+spec:
+  schedule: "0 1 * * *"   # Run daily at 01:00
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: pv-cleanup-sa
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          restartPolicy: OnFailure
+          containers:
+          - name: pv-cleanup
+            image: bitnami/kubectl:latest
+            command: ["/bin/bash", "/scripts/pv_list.sh"]
+            volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+            - name: nfs-share
+              mountPath: /mnt/nfs-share
+          volumes:
+          - name: script
+            configMap:
+              name: pv-cleanup-script
+              defaultMode: 0755
+          - name: nfs-share
+            hostPath:
+              path: /mnt/nfs-share
+              type: Directory
+

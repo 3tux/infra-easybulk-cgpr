@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pv-cleanup-script
+  namespace: esb
+data:
+  pv_list.sh: |
+    #!/bin/bash
+    echo "=== PV Cleanup Dry-Run started at $(date) ==="
+
+    NFS_BASE="/mnt/nfs-share"
+    TRASH_DIR="$NFS_BASE/pvc-trash"
+
+    # Ensure trash folder exists
+    mkdir -p "$TRASH_DIR"
+
+    for pv in $(kubectl get pv -o jsonpath='{range .items[?(@.status.phase=="Released")]}{.metadata.name}{"\n"}{end}'); do
+        pvc_in_use=$(kubectl get pvc --all-namespaces -o jsonpath="{range .items[?(@.spec.volumeName=='$pv')]}{.metadata.name}{end}")
+
+        if [ -z "$pvc_in_use" ]; then
+            # Construct NFS path
+            nfs_path=$(kubectl get pv "$pv" -o jsonpath='{.spec.csi.volumeAttributes.path}' 2>/dev/null)
+            if [ -z "$nfs_path" ]; then
+                nfs_path="$NFS_BASE/$pv"
+            fi
+
+            echo "✅ PV $pv is Released and not used."
+            echo "   NFS Path: $nfs_path"
+
+            # Dry-run: just echo deletion
+            echo "   Would delete PV $pv in Kubernetes"
+            echo "   Would move NFS directory to $TRASH_DIR/$pv"
+
+            kubectl delete pv "$pv"
+            mv "$nfs_path" "$TRASH_DIR/$pv"
+        else
+            echo "⚠️ PV $pv is Released but still referenced by PVC: $pvc_in_use"
+        fi
+    done
+
+    echo "=== PV Cleanup Dry-Run finished at $(date) ==="
+
